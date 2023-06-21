@@ -8,18 +8,13 @@ defmodule WindUp.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Start the Telemetry supervisor
+      {Registry, [keys: :unique, name: WindUp.Registry]},
       WindUpWeb.Telemetry,
-      # Start the Ecto repository
       WindUp.Repo,
-      # Start the PubSub system
       {Phoenix.PubSub, name: WindUp.PubSub},
-      # Start Finch
       {Finch, name: WindUp.Finch},
-      # Start the Endpoint (http/https)
       WindUpWeb.Endpoint
-      # Start a worker by calling: WindUp.Worker.start_link(arg)
-      # {WindUp.Worker, arg}
+      # {WindUp.Timer.Supervisor, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
