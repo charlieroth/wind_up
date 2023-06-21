@@ -1,14 +1,16 @@
-defmodule WindUp.Timer.Supervisor do
+defmodule WindUp.TimerSupervisor do
   use DynamicSupervisor
   alias WindUp.Timer
 
-  def start_link(_args) do
-    DynamicSupervisor.start_link(__MODULE__, [], name: __MODULE__)
+  @spec add_timer(String.t(), integer()) ::
+          :ignore | {:error, any()} | {:ok, pid()} | {:ok, pid(), any()}
+  def add_timer(timer_id, number_of_seconds) do
+    child_spec = {Timer, {timer_id, number_of_seconds}}
+    DynamicSupervisor.start_child(__MODULE__, child_spec)
   end
 
-  def add_alarm(alarm_id) do
-    child_spec = {Timer, alarm_id}
-    DynamicSupervisor.start_child(__MODULE__, child_spec)
+  def start_link(_args) do
+    DynamicSupervisor.start_link(__MODULE__, [], name: __MODULE__)
   end
 
   @impl true
