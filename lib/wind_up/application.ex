@@ -9,11 +9,11 @@ defmodule WindUp.Application do
   def start(_type, _args) do
     children = [
       {Registry, [keys: :unique, name: WindUp.Registry]},
-      WindUpWeb.Telemetry,
-      WindUp.Repo,
+      # WindUpWeb.Telemetry,
+      # WindUp.Repo,
       {Phoenix.PubSub, name: WindUp.PubSub},
-      {Finch, name: WindUp.Finch},
-      WindUpWeb.Endpoint
+      # {Finch, name: WindUp.Finch},
+      # WindUpWeb.Endpoint
       # {WindUp.Timer.Supervisor, []}
     ]
 

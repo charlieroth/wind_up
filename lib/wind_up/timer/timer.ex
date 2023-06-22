@@ -14,6 +14,14 @@ defmodule WindUp.Timer do
     GenServer.cast(via_tuple(id), :resume)
   end
 
+  def reset(id) do
+    GenServer.cast(via_tuple(id), :reset)
+  end
+
+  def cancel(id) do
+    GenServer.call(via_tuple(id), :cancel)
+  end
+
   def start_link({id, _number_of_seconds} = args) do
     GenServer.start_link(__MODULE__, args, name: via_tuple(id))
   end
@@ -31,6 +39,7 @@ defmodule WindUp.Timer do
       :ok,
       %{
         id: id,
+        status: :running,
         timer_ref: timer_ref,
         number_of_seconds: number_of_seconds,
         time_elapsed: 0,
@@ -45,13 +54,39 @@ defmodule WindUp.Timer do
   end
 
   @impl true
-  def handle_cast(:pause, state) do
-    with :ok <- Process.cancel_timer(state.timer_ref, async: false, info: true) do
-      Logger.info("#{state.id}:paused")
-      {:noreply, %{state | timer_ref: nil}}
+  def handle_call(:cancel, _from, state) do
+    with :ok <- Process.cancel_timer(state.timer_ref, async: true, info: false) do
+      new_state = %{state | timer_ref: nil, status: :canceled}
+      Logger.info("#{state.id}:canceled")
+      {:reply, new_state, new_state}
     else
       reason ->
-        Logger.info("#{state.id}:failed_to_pause:#{inspect(reason)}")
+        Logger.error("Failed to cancel timer: #{state.id}, #{inspect(reason)}")
+        {:reply, state, state}
+    end
+  end
+
+  @impl true
+  def handle_cast(:reset, state) do
+    with :ok <- Process.cancel_timer(state.timer_ref, async: true, info: false) do
+      timer_ref = Process.send_after(self(), :tick, 1000)
+      new_state = %{state | timer_ref: timer_ref, status: :running, time_elapsed: 0}
+      Logger.info("#{state.id}:reset")
+      {:noreply, new_state}
+    else
+      reason ->
+        Logger.error("Failed to cancel timer: #{state.id}, #{inspect(reason)}")
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_cast(:pause, state) do
+    with :ok <- Process.cancel_timer(state.timer_ref, async: true, info: false) do
+      {:noreply, %{state | timer_ref: nil, status: :paused}}
+    else
+      reason ->
+        Logger.error("#{state.id}:failed_to_pause:#{inspect(reason)}")
         {:noreply, state}
     end
   end
@@ -60,22 +95,40 @@ defmodule WindUp.Timer do
   def handle_cast(:resume, state) do
     Logger.info("#{state.id}:resumed")
     timer_ref = Process.send_after(self(), :tick, 1000)
-    {:noreply, %{state | timer_ref: timer_ref}}
+    {:noreply, %{state | timer_ref: timer_ref, status: :running}}
   end
 
   @impl true
   def handle_info(:tick, state) do
     new_time_elapsed = state.time_elapsed + 1
-    # Logger.info("#{state.id}:tick:#{new_time_elapsed}")
 
     if new_time_elapsed == state.number_of_seconds do
-      new_state = %{state | completed: true, time_elapsed: new_time_elapsed}
-      Logger.info("#{state.id}:done")
-      {:noreply, new_state}
+      with :ok <- Process.cancel_timer(state.timer_ref, async: true, info: false) do
+        new_state = %{
+          state
+          | completed: true,
+            time_elapsed: new_time_elapsed,
+            status: :done,
+            timer_ref: nil
+        }
+
+        Logger.info("#{state.id}:done")
+        {:noreply, new_state}
+      else
+        reason ->
+          Logger.error("Failed to cancel timer: #{inspect(reason)}")
+          {:noreply, state}
+      end
     else
-      new_state = %{state | time_elapsed: new_time_elapsed}
-      Process.send_after(self(), :tick, 1000)
-      {:noreply, new_state}
+      with :ok <- Process.cancel_timer(state.timer_ref, async: true, info: false) do
+        timer_ref = Process.send_after(self(), :tick, 1000)
+        new_state = %{state | time_elapsed: new_time_elapsed, timer_ref: timer_ref}
+        {:noreply, new_state}
+      else
+        reason ->
+          Logger.error("Failed to cancel timer: #{inspect(reason)}")
+          {:noreply, state}
+      end
     end
   end
 
